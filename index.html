@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Appender Web App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .file-input {
+            margin-bottom: 10px;
+        }
+        .file-input label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e7f3fe;
+            border: 1px solid #b6d4fe;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CSV Appender</h1>
+        <div class="file-input">
+            <label for="mainFile">Main CSV File:</label>
+            <input type="file" id="mainFile" accept=".csv">
+        </div>
+        <div class="file-input">
+            <label for="appendFiles">Files to Append:</label>
+            <input type="file" id="appendFiles" accept=".csv" multiple>
+        </div>
+        <div>
+            <label>
+                <input type="radio" name="appendOption" value="rows" checked> Append by Rows
+            </label>
+            <label>
+                <input type="radio" name="appendOption" value="columns"> Append by Columns
+            </label>
+        </div>
+        <div>
+            <label for="columnsToRemove">Number of columns to remove:</label>
+            <input type="number" id="columnsToRemove" min="0" value="0">
+        </div>
+        <button onclick="appendFiles()">Append Files</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let mainFile, filesToAppend;
+
+        document.getElementById('mainFile').addEventListener('change', (event) => {
+            mainFile = event.target.files[0];
+        });
+
+        document.getElementById('appendFiles').addEventListener('change', (event) => {
+            filesToAppend = event.target.files;
+        });
+
+        function appendFiles() {
+            if (!mainFile || filesToAppend.length === 0) {
+                alert("Please select main file and files to append.");
+                return;
+            }
+
+            const appendOption = document.querySelector('input[name="appendOption"]:checked').value;
+            const columnsToRemove = parseInt(document.getElementById('columnsToRemove').value, 10);
+
+            Papa.parse(mainFile, {
+                complete: function(mainResults) {
+                    let mainData = mainResults.data;
+                    const filesToProcess = Array.from(filesToAppend);
+                    
+                    processFiles(filesToProcess, mainData, appendOption, columnsToRemove);
+                }
+            });
+        }
+
+        function processFiles(files, mainData, appendOption, columnsToRemove) {
+            if (files.length === 0) {
+                downloadCSV(mainData);
+                return;
+            }
+
+            const file = files.shift();
+
+            Papa.parse(file, {
+                complete: function(results) {
+                    let dataToAppend = results.data;
+
+                    if (columnsToRemove > 0) {
+                        dataToAppend = dataToAppend.map(row => row.slice(columnsToRemove));
+                    }
+
+                    if (appendOption === 'rows') {
+                        mainData = mainData.concat(dataToAppend.slice(1)); // Exclude header row
+                    } else {
+                        for (let i = 0; i < mainData.length; i++) {
+                            mainData[i] = mainData[i].concat(dataToAppend[i] || []);
+                        }
+                    }
+
+                    processFiles(files, mainData, appendOption, columnsToRemove);
+                }
+            });
+        }
+
+        function downloadCSV(data) {
+            const csv = Papa.unparse(data);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'appended_file.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            document.getElementById('result').innerHTML = 'Files appended successfully! Download started.';
+        }
+    </script>
+</body>
+</html>
